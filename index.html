@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Timer</title>
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/12883/12883868.png">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #timer-display {
+            font-size: 8vw; /* Responsive font size */
+            font-weight: bold;
+            color: black;
+            margin-bottom: 20px;
+        }
+
+        input {
+            font-size: 1.2rem;
+            padding: 10px;
+            width: 80%; /* Responsive width */
+            max-width: 300px;
+            text-align: center;
+            margin-bottom: 15px;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        button {
+            font-size: 1rem;
+            padding: 12px 20px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            flex: 1 1 120px;
+            max-width: 150px;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        button:nth-child(1) { background: #007bff; color: white; }
+        button:nth-child(2) { background: #ffc107; color: black; }
+        button:nth-child(3) { background: #dc3545; color: white; }
+
+        #progress-bar {
+            position: fixed;
+            bottom: 10px;
+            width: 90%;
+            height: 8px;
+            background: #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #progress {
+            height: 100%;
+            width: 0%;
+            background: #28a745;
+            transition: width 0.5s ease-in-out;
+        }
+
+        #toast-container {
+            position: fixed;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .toast {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            animation: fadeOut 5s forwards;
+        }
+
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        @media (max-width: 600px) {
+            #timer-display {
+                font-size: 12vw; /* Larger font for smaller screens */
+            }
+            input {
+                font-size: 1rem;
+                width: 90%;
+            }
+            .controls {
+                flex-direction: column; /* Stack buttons vertically */
+            }
+            button {
+                font-size: 1rem;
+                padding: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="timer-display">
+        <span id="display">00:00:00</span>
+    </div>
+    <input type="number" id="duration" placeholder="Enter duration in minutes">
+    <div class="controls">
+        <button onclick="startTimer()">Start</button>
+        <button id="pause-resume" onclick="pauseResumeTimer()">Pause</button>
+        <button onclick="resetTimer()">Reset</button>
+    </div>
+
+    <div id="progress-bar">
+        <div id="progress"></div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <audio id="alert-sound" src="https://cdn.pixabay.com/audio/2024/02/07/audio_c059f11d86.mp3"></audio>
+
+    <script>
+        let timer;  // to store time interval
+        let timeLeft = 0;
+        let isPaused = false;
+        let totalDuration = 0;
+        const alertSound = document.getElementById("alert-sound");
+        
+        // this function run once when you click anywhere on the screen
+        document.addEventListener("click", () => {
+            alertSound.muted = true; 
+            alertSound.play().catch(error => console.log("User interaction required for audio playback"));
+        }, { once: true });
+        
+        function updateDisplay() {
+            let hours = Math.floor(timeLeft / 3600);
+            let minutes = Math.floor((timeLeft % 3600) / 60);
+            let seconds = timeLeft % 60;
+            document.getElementById("display").textContent = 
+                `${hours}:${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+            updateProgress();
+        }
+        
+        function updateProgress() {
+            document.getElementById("progress").style.width = (timeLeft / totalDuration) * 100 + "%";
+        }
+        
+        function startTimer() {
+            let inputMinutes = parseInt(document.getElementById("duration").value);
+            if (isNaN(inputMinutes) || inputMinutes < 1) {
+                alert("Please enter a valid positive number (minimum 1 minute).");
+                return;
+            }
+            timeLeft = inputMinutes * 60;
+            totalDuration = timeLeft;
+            updateDisplay();
+            if (timer) clearInterval(timer);
+            isPaused = false;
+            document.getElementById("pause-resume").textContent = "Pause";
+            showToast("Meeting has started.");
+            alertSound.muted = false;
+            startCountdown();
+        }
+        
+        function startCountdown() {
+            timer = setInterval(() => {
+                if (!isPaused && timeLeft > 0) {
+                    timeLeft--;
+                    updateDisplay();
+                    checkAlerts();
+                } else if (timeLeft === 0) {
+                    clearInterval(timer);
+                    showToast("Meeting duration has completed.", true);
+                    document.getElementById("display").style.color = "red";
+                    document.getElementById("duration").value = "";
+                }
+            }, 1000);
+        }
+        
+        function pauseResumeTimer() {
+            if (isPaused) {
+                isPaused = false;
+                document.getElementById("pause-resume").textContent = "Pause";
+                startCountdown();
+            } else {
+                isPaused = true;
+                clearInterval(timer);
+                document.getElementById("pause-resume").textContent = "Resume";
+            }
+        }
+        
+        function resetTimer() {
+            clearInterval(timer);
+            timeLeft = 0;
+            document.getElementById("display").textContent = "00:00:00";
+            document.getElementById("progress").style.width = "100%";
+            document.getElementById("display").style.color = "black";
+            document.getElementById("pause-resume").textContent = "Pause";
+            document.getElementById("duration").value = "";
+        }
+        
+        function checkAlerts() {
+            let completedTime = totalDuration - timeLeft;
+            let alertThresholds = {
+                "50%": totalDuration * 0.50,
+                "75%": totalDuration * 0.75,
+                "90%": totalDuration * 0.90,
+                "100%": totalDuration * 1
+            };
+        
+            for (let [key, value] of Object.entries(alertThresholds)) {
+                if (completedTime === Math.floor(value)) {
+                    console.log("Playing sound...");
+                    alertSound.play().catch(error => console.error("Audio playback failed:", error));
+                    let remainingHours = Math.floor(timeLeft / 3600);
+                    let remainingMinutes = Math.floor((timeLeft % 3600) / 60);
+                    let remainingSeconds = timeLeft % 60;
+                    showToast(`${key} of meeting duration completed.\nTime remaining: ${remainingHours}h ${remainingMinutes}m ${remainingSeconds}s`);
+                    
+                    // Trigger fast blinking
+                    blinkScreen();
+                }
+            }
+            if (timeLeft === 0) {
+                showToast("Meeting duration has completed.", true);
+                document.getElementById("display").style.color = "red";
+                blinkScreen();
+            }
+        }
+        
+        function blinkScreen() {
+            let count = 0;
+            let isBlack = true;
+        
+            let blinkInterval = setInterval(() => {
+                debugger;
+                document.body.style.backgroundColor = isBlack ? "black" : "white";
+                isBlack = !isBlack;
+                count++;
+        
+                if (count === 10) { // 5 full blinks
+                    clearInterval(blinkInterval);
+                    document.body.style.backgroundColor = "#f4f4f4"; // Reset to original background color - light gray
+                }
+            }, 100); // Change color after every 100 milli-seconds
+        }
+        
+        
+        function showToast(message, isFinal = false) {
+            let toast = document.createElement("div");
+            toast.className = "toast";
+            toast.textContent = message;
+            if (isFinal) toast.style.color = "red";
+            document.getElementById("toast-container").appendChild(toast);
+            setTimeout(() => { toast.remove(); }, 5000);
+        }
+        
+            </script>
+</body>
+</html>
